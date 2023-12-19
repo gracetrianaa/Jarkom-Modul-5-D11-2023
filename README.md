@@ -319,3 +319,128 @@ Lakukan `ping google.com` untuk testing apakah topologi sudah bisa akses keluar.
 ![Alt text](images/Testing_No1.png)
 
 ## SOAL 2
+
+Kalian diminta untuk melakukan drop semua TCP dan UDP kecuali port 8080 pada TCP.
+
+### Answer
+
+Pada shell script `nomor2.sh` dijalankan command untuk install dependencies terlebih dahulu
+
+```
+echo 'nameserver 192.168.122.1' > /etc/resolv.conf
+
+apt-get update
+apt-get install netcat -y
+```
+
+Selanjutnya, baru ditambahkan command untuk melakukan drop semua TCP dan UDP kecuali port 8080 pada TCP dengan memanfaatkan `iptables`
+
+```
+# kecuali port 8080 pada TCP
+iptables -A INPUT -p tcp --dport 8080 -j ACCEPT
+```
+
+Command di atas akan ACCEPT (menerima) semua koneksi dari protocol `TCP` dan port tujuan `8080` dan menambahkan rules ke `INPUT` chain.
+
+```
+# untuk melakukan drop semua TCP dan UDP
+iptables -A INPUT -p tcp -j DROP
+iptables -A INPUT -p udp -s 10.27.0.0/20 -j DROP
+```
+
+- Command baris pertama akan DROP semua koneksi dari protocol `TCP` dan menambahkannya ke rules `INPUT` chain.
+- Command baris kedua akan DROP semua koneksi dari protocol `UDP` dan IP `10.27.0.0` kemudian ditambahkan ke rules `INPUT` chain.
+
+### Testing
+
+Untuk melakukan testing, kita dapat memanfaatkan `netcat` pada `Sein` sebagai `sender` dan `TurkRegion` sebagai `receiver`. Pada sender kita akan mengirimkan sebuah pesan dan lihat di receiver apakah pesan tersebut masuk atau tidak. Command yang digunakan sebagai berikut.
+
+- Sein (sender)
+
+```
+nc 10.27.8.3 8080
+nc 10.27.8.3 8000
+```
+
+Command di atas akan melakukan koneksi ke IP `10.27.8.3` yaitu IP dari `TurkRegion` dan bisa diikuti oleh pesan apa yang akan dikirim ke receiver.
+
+![Alt text](images/Testing_No2.png)
+
+- TurkRegion (receiver)
+
+```
+nc -l -p 8080
+nc -l -p 8000
+```
+
+Command ini akan mendengarkan dari port `8080` dan `8000`
+
+![Alt text](images/Testing_2_No2.png)
+
+Terlihat pada port `8080` pesan yang dikirim sender masuk karena tadi kita menerima koneksi dari port `8080` dan pada port `8080` tidak muncul pesan apapun karena sebelumnya kita telah mengatur untuk DROP semua koneksi dari protocol `UDP` dan `TCP` yang umumnya berada di port `8000`.
+
+## SOAL 3
+
+Kepala Suku North Area meminta kalian untuk membatasi DHCP dan DNS Server hanya dapat dilakukan ping oleh maksimal 3 device secara bersamaan, selebihnya akan di drop.
+
+### Answer
+
+Pada kedua DHCP dan DNS Server kita tambahkan script yang berisi
+
+```
+iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+iptables -A INPUT -p icmp -m connlimit --connlimit-above 3 --connlimit-mask 0 -j DROP
+```
+
+Penjelasan :
+
+- Command baris pertama berfungsi untuk `ACCEPT` semua koneksi yang memiliki state `ESTABLISHED` (koneksi yang telah diinisiasi dalam sistem) dan `RELATED` (koneksi yang berkaitan dengan koneksi yang sudah ada) kemudian ditambahkan ke rules `INPUT` chain.
+- Command baris kedua akan `DROP` koneksi dari protokol `ICMP` (contohnya ping) jika koneksinya lebih dari 3.
+
+### Testing
+
+Kita dapat melakukan testing dengan melakukan `ping` secara bersamaan dari 4 node ke DHCP atau DNS server. Berikut contoh testing dari keempat client `LaubHills`, `GrobeForest`, `SchwerMountains`, `TurkRegion` ke `Revolte`.
+
+![Alt text](images/Testing_No3.png)
+
+Terlihat bahwa hanya 3 device yang bisa mengirim koneksi dan tersambung dengan `Revolte` sedangkan 1 device ditolak koneksinya karena telah dibatasi.
+
+## SOAL 4
+
+Lakukan pembatasan sehingga koneksi SSH pada Web Server hanya dapat dilakukan oleh masyarakat yang berada pada GrobeForest.
+
+### Answer
+
+Kita akan menjalankan script pada kedua Web Server yaitu `Sein` dan `Stark` yang berisi command sebagai berikut.
+
+```
+iptables -A INPUT -p tcp --dport 22 -s 10.27.4.0/22 -j ACCEPT
+
+iptables -A INPUT -p tcp --dport 22 -j DROP
+```
+
+Penjelasan :
+
+- Command baris pertama akan `ACCEPT` koneksi dari protocol `TCP` dan IP `10.27.4.0` yang merupakan IP dari subnet GrobeForest serta destination port `22` yang menandakan koneksi SSH (22 adalah default port dari SSH). Setelah itu, rules akan ditambahkan ke `INPUT` chain.
+- Command baris kedua akan melakukan `DROP` semua koneksi SSH (port 22 yang bukan berasal dari `GrobeForest`.
+
+### Testing
+
+Testing dapat dilakukan di `GrobeForest` dan node client lain sebagai perbandingan. Kita akan memanfaatkan command `nmap` untuk melihat status koneksi SSH. Berikut merupakan contoh testing dari `GrobeForest` dan `LaubHills` ke Web Server `Sein`
+
+```
+nmap 10.27.4.2
+```
+
+Jangan lupa untuk membuka koneksi port SSH dari sisi Sein terlebih dahulu dengan `netcat`
+
+```
+nc -l -p 22
+```
+
+![Alt text](images/Testing_No4.png)
+
+Terlihat pada `GrobeForest` state dari port SSH adalah `open` sedangkan pada `LaubHills` state dari port SSHnya adalah `filtered` yang berarti ditolak.
+
+## SOAL 5
