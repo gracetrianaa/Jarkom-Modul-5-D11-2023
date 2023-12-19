@@ -423,14 +423,14 @@ iptables -A INPUT -p tcp --dport 22 -j DROP
 Penjelasan :
 
 - Command baris pertama akan `ACCEPT` koneksi dari protocol `TCP` dan IP `10.27.4.0` yang merupakan IP dari subnet GrobeForest serta destination port `22` yang menandakan koneksi SSH (22 adalah default port dari SSH). Setelah itu, rules akan ditambahkan ke `INPUT` chain.
-- Command baris kedua akan melakukan `DROP` semua koneksi SSH (port 22 yang bukan berasal dari `GrobeForest`.
+- Command baris kedua akan melakukan `DROP` semua koneksi SSH (port 22) yang bukan berasal dari `GrobeForest`.
 
 ### Testing
 
 Testing dapat dilakukan di `GrobeForest` dan node client lain sebagai perbandingan. Kita akan memanfaatkan command `nmap` untuk melihat status koneksi SSH. Berikut merupakan contoh testing dari `GrobeForest` dan `LaubHills` ke Web Server `Sein`
 
 ```
-nmap 10.27.4.2
+nmap 10.27.4.2 22
 ```
 
 Jangan lupa untuk membuka koneksi port SSH dari sisi Sein terlebih dahulu dengan `netcat`
@@ -444,3 +444,106 @@ nc -l -p 22
 Terlihat pada `GrobeForest` state dari port SSH adalah `open` sedangkan pada `LaubHills` state dari port SSHnya adalah `filtered` yang berarti ditolak.
 
 ## SOAL 5
+
+Selain itu, akses menuju WebServer hanya diperbolehkan saat jam kerja yaitu Senin-Jumat pada pukul 08.00-16.00.
+
+### Answer
+
+Melanjutkan dari nomor 4 tadi, kita tambahkan script pada kedua Web Server yang berisi command berikut.
+
+```
+iptables -F
+
+iptables -A INPUT -p tcp --dport 22 -s 10.27.4.0/22 -m time --weekdays Mon,Tue,Wed,Thu,Fri --timestart 08:00 --timestop 16:00 -j ACCEPT
+
+iptables -A INPUT -p tcp --dport 22 -j REJECT
+```
+
+- `iptables -F` akan menghapus rules `iptables` yang sebelumnya sudah ada.
+- Command baris kedua akan `ACCEPT` koneksi dari protocol `TCP` dengan destination port 22 (SSH) dan dari IP subnet `GrobeForest`. Dengan tambahan `-m time --weekdays Mon,Tue,Wed,Thu,Fri --timestart 08:00 --timestop 16:00` yang akan mengatur koneksi yang diterima hanya dari weekdays (Senin-Jumat) dan rentang waktu mulai pukul `08:00` sampai `16:00`.
+- Command baris ketiga akan `REJECT` atau menolak semua koneksi SSH yang tidak sesuai rules.
+
+### Testing
+
+Testing menggunakan `nmap` pada `GrobeForest` dan node lain sebagai pembanding. Berikut merupakan testing yang dilakukan pada `GrobeForest` dan `LaubHills` ke `Sein` (jangan lupa untuk membuka port terlebih dahulu dengan netcat) dengan command berikut.
+
+```
+nmap 10.27.4.2 22
+```
+
+![Alt text](images/Testing_No5.png)
+
+`date` menunjukkan hari Jumat pukul `09:58` (yang mana memenuhi rules) sehingga terlihat pada `GrobeForest` state dari koneksi SSHnya adalah `open`. Sedangkan, pada `LaubHills` state koneksi SSH tetap `filtered` karena tidak memenuhi rules (bukan GrobeForest) meskipun datenya sesuai.
+
+![Alt text](images/Testing_2_No5.png)
+
+Kita coba mengubah `date` menjadi hari Jumat pukul `20:38`. Terlihat di `GrobeForest` state koneksi sudah `filtered` yang berarti ditolak karena tidak sesuai rules.
+
+## SOAL 6
+
+Lalu, karena ternyata terdapat beberapa waktu di mana network administrator dari WebServer tidak bisa stand by, sehingga perlu ditambahkan rule bahwa akses pada hari Senin - Kamis pada jam 12.00 - 13.00 dilarang (istirahat maksi cuy) dan akses di hari Jumat pada jam 11.00 - 13.00 juga dilarang (maklum, Jumatan rek).
+
+### Answer
+
+Masih lanjutan dari 2 nomor sebelumnya, pada Web Server kita tambahkan script untuk menjalankan command
+
+```
+iptables -I INPUT -p tcp --dport 22 -s 10.27.4.0/22 -m time --weekdays Mon,Tue,Wed,Thu --timestart 12:00 --timestop 13:00 -j DROP
+
+iptables -I INPUT -p tcp --dport 22 -s 10.27.4.0/22 -m time --weekdays Fri --timestart 11:00 --timestop 13:00 -j DROP
+```
+
+- Command baris pertama mengatur untuk `DROP` koneksi protocol `TCP` dan `SSH` yang dikirim pada hari Senin-Kamis pada pukul `--timestart 12:00 --timestop 13:00`. `iptables -I INPUT` akan menambahkan rules ke `INPUT` chain dengan `-I` berfungsi untuk menaruh rules pada posisi atas.
+- Command baris kedua memiliki fungsi yang sama dengan baris pertama, hanya terdapat perbedaan pada `-m time --weekdays Fri --timestart 11:00 --timestop 13:00` yang akan menolak paket pada hari `Jumat` pukul `11:00 - 13:00`
+
+### Testing
+
+Testing dilakukan menggunakan `nmap` dengan mengatur `date` sesuai kebutuhan. Berikut merupakan hasil testing di `GrobeForest` dan `LaubHills`
+
+![Alt text](images/Testing_No6.png)
+
+Terlihat pada `GrobeForest` telah diatur datenya menjadi hari `Jumat` pukul `12:35` yang state koneksi SSHnya adalah `filtered` yang berarti `ditolak` karena tidak sesuai rules (hari Jumat pukul 12:35 sedang jumatan). Pada `LaubHills` sudah pasti paket ditolak karena tidak sesuai rules (bukan masyarakat GrobeForest).
+
+## SOAL 7
+
+### Answer
+
+### Testing
+
+## SOAL 8
+
+Karena berbeda koalisi politik, maka subnet dengan masyarakat yang berada pada Revolte dilarang keras mengakses WebServer hingga masa pencoblosan pemilu kepala suku 2024 berakhir. Masa pemilu (hingga pemungutan dan penghitungan suara selesai) kepala suku bersamaan dengan masa pemilu Presiden dan Wakil Presiden Indonesia 2024.
+
+### Answer
+
+Kita perlu mengatur konfigurasi `iptables` pada script kedua `Web Server` yang berisi command sebagai berikut.
+
+```
+REVOLTE_SUBNET="10.27.0.0/30"
+
+masa_pemilu_start=$(date -d "2023-10-19T00:00" +"%Y-%m-%dT%H:%M")
+
+masa_pemilu_end=$(date -d "2024-02-15T00:00" +"%Y-%m-%dT%H:%M")
+
+# IPTABLE masa pemilu
+iptables -A INPUT -p tcp -s $REVOLTE_SUBNET --dport 80 -m time --datestart "$masa_pemilu_start" --datestop "$masa_pemilu_end" -j DROP
+```
+
+Penjelasan :
+
+- `REVOLTE_SUBNET="10.27.0.0/30"` : membuat variabel yang berisi alamat IP dari subnet `Revolte`.
+- `masa_pemilu_start=$(date -d "2023-10-19T00:00" +"%Y-%m-%dT%H:%M")` : membuat variabel yang menyimpan tanggal pemilu dimulai yaitu `19-10-2023` pukul `00:00` dengan format `YEAR-MONTH-DAYHOUR:MINUTES`.
+- `masa_pemilu_end=$(date -d "2024-02-15T00:00" +"%Y-%m-%dT%H:%M")` : membuat variabel yang menyimpan tanggal pemilu selesai yaitu `15-02-2024` pukul `00:00` dengan format `YEAR-MONTH-DAYHOUR:MINUTES`.
+- Command baris terakhir akan `DROP` koneksi dengan protocol `TCP` dan destination port `80` dari IP subnet `Revolte`. Serta opsi `-m time --datestart "$masa_pemilu_start" --datestop "$masa_pemilu_end"` yang mengatur tanggal mulai dan tanggal selesai sesuai variabel yang telah diatur di atas.
+
+### Testing
+
+Testing menggunakan `nmap` ke `Web Server` dari `Revolte`. Sebelumnya, kita dapat mengatur `date` terlebih dahulu sesuai rentang waktu pemilu agar terlihat state dari koneksi yang telah diatur iptablesnya. Command untuk testing seperti di bawah ini.
+
+```
+nmap 10.27.4.2 80
+```
+
+![Alt text](images/Testing_No8.png)
+
+Terlihat state koneksi HTTP atau `port 80` adalah `filtered` karena tanggal dari `Revolte` adalah `16-01-2024` yang mana masih dalam masa pemilu sehingga koneksi `ditolak`.
