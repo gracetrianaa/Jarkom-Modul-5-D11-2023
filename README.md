@@ -508,7 +508,30 @@ Terlihat pada `GrobeForest` telah diatur datenya menjadi hari `Jumat` pukul `12:
 
 ### Answer
 
+Pada script kita jalankan command
+
+```
+iptables -t nat -F
+
+# Akses ke Sein port 80
+iptables -A PREROUTING -t nat -p tcp --dport 80 -d 10.27.4.2 -m statistic --mode nth --every 2 --packet 0 -j DNAT --to-destination 10.27.4.2
+iptables -A PREROUTING -t nat -p tcp --dport 80 -d 10.27.4.2 -j DNAT --to-destination 10.27.0.14
+
+# Akses ke Stark port 443
+
+iptables -A PREROUTING -t nat -p tcp --dport 443 -d 10.27.0.14 -m statistic --mode nth --every 2 --packet 0 -j DNAT --to-destination 10.27.4.2
+iptables -A PREROUTING -t nat -p tcp --dport 443 -d 10.27.0.14 -j DNAT --to-destination 10.27.0.14
+```
+
 ### Testing
+
+Untuk testing bisa dilakukan salah satunya ketika mengakses port 80, kita menjalankan
+
+- Command `while true; do nc -l -p 80 -c 'echo "ini sein"'; done` di `Sein`
+- Command `while true; do nc -l -p 80 -c 'echo "ini stark"'; done` di `Stark`
+- Command `nc [IP Web Server] 80` di salah satu client (di sini kami menggunakan `TurkRegion`)
+
+![Alt text](images/Testing_No7.jpg)
 
 ## SOAL 8
 
@@ -547,3 +570,46 @@ nmap 10.27.4.2 80
 ![Alt text](images/Testing_No8.png)
 
 Terlihat state koneksi HTTP atau `port 80` adalah `filtered` karena tanggal dari `Revolte` adalah `16-01-2024` yang mana masih dalam masa pemilu sehingga koneksi `ditolak`.
+
+## SOAL 9
+
+Sadar akan adanya potensial saling serang antar kubu politik, maka WebServer harus dapat secara otomatis memblokir alamat IP yang melakukan scanning port dalam jumlah banyak (maksimal 20 scan port) di dalam selang waktu 10 menit.
+(clue: test dengan nmap)
+
+### Answer
+
+Dalam kedua Web Server yaitu `Sein` dan `Stark` jalankan script yang berisi command
+
+```
+iptables -N port_scanning
+
+iptables -A INPUT -m recent --name port_scanning --update --seconds 600 --hitcount 20 -j DROP
+iptables -A FORWARD -m recent --name port_scanning --update --seconds 600 --hitcount 20 -j DROP
+
+iptables -A INPUT -m recent --name port_scanning --set -j ACCEPT
+iptables -A FORWARD -m recent --name port_scanning --set -j ACCEPT
+```
+
+Command di atas akan menambahkan rule untuk chain baru `port_scanning` yang membatasi maksimal 20 port dalam selang 10 menit (600 seconds).
+
+### Testing
+
+Testing dengan melakukan ping ke Web Server sebanyak lebih dari 20 untuk melihat apakah port telah dibatasi.
+
+![Alt text](images/Testing_No9.png)
+
+## SOAL 10
+
+Karena kepala suku ingin tau paket apa saja yang di-drop, maka di setiap node server dan router ditambahkan logging paket yang di-drop dengan standard syslog level.
+
+### Answer
+
+Pada tiap node server dan router kita menjalankan script yang berisi
+
+```
+iptables -A INPUT  -j LOG --log-level debug --log-prefix 'PACKET_DROP' -m limit --limit 1/second --limit-burst 5
+```
+
+Kemudian, kita bisa menggunakan `iptables -L` untuk memeriksa apakah log sudah masuk ke rules.
+
+![Alt text](images/Testing_No10.png)
